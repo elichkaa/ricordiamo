@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface PracticeViewProps {
   getCurrentTargetText: () => string;
@@ -36,21 +36,26 @@ const PracticeView: React.FC<PracticeViewProps> = ({
   const [showTargetText, setShowTargetText] = useState<boolean>(true);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const hasPlayedRef = useRef<boolean>(false);
+  
+  const userInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const loadVoices = () => {
-        setVoices(window.speechSynthesis.getVoices());
+      setVoices(window.speechSynthesis.getVoices());
     };
 
     loadVoices();
 
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = loadVoices;
+      window.speechSynthesis.onvoiceschanged = loadVoices;
     }
-    }, []);
-
-  
-  const userInputRef = useRef<HTMLTextAreaElement>(null);
+    
+    return () => {
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // hide text after 1/3 of max repetitions
@@ -65,22 +70,43 @@ const PracticeView: React.FC<PracticeViewProps> = ({
   }, []);
 
   useEffect(() => {
-    const stateKey = `${repetitions}-${currentLineIndex}`;
-    
-    if (autoPlayVoice && userInput === '' && !hasPlayedRef.current) {
-        hasPlayedRef.current = true;
-        
-        setTimeout(() => {
+    if (autoPlayVoice && userInput === '' && !hasPlayedRef.current && showTargetText) {
+      hasPlayedRef.current = true;
+      
+      setTimeout(() => {
         speakText();
-        }, 200);
+      }, 200);
     }
     
     return () => {
-        hasPlayedRef.current = false;
+      hasPlayedRef.current = false;
     };
-    }, [repetitions, currentLineIndex, autoPlayVoice, userInput]);
+  }, [repetitions, currentLineIndex, autoPlayVoice, userInput, showTargetText]);
 
-  const checkInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  useEffect(() => {
+    if (!showTargetText && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, [showTargetText]);
+
+  const speakText = useCallback(() => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(getCurrentTargetText());
+      utterance.lang = speechLanguage;
+      
+      const matchingVoices = voices.filter(voice => voice.lang.startsWith(speechLanguage));
+      if (matchingVoices.length > 0) {
+        utterance.voice = matchingVoices[0];
+      }
+      
+      console.log(`Speaking in language: ${speechLanguage}`);
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [getCurrentTargetText, speechLanguage, voices]);
+
+  const checkInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newInput = e.target.value;
     setUserInput(newInput);
     
@@ -103,22 +129,11 @@ const PracticeView: React.FC<PracticeViewProps> = ({
       const isCorrectSoFar = targetText.startsWith(newInput);
       setInputColor(isCorrectSoFar ? 'white' : 'red');
     }
-  };
+  }, [getCurrentTargetText, repetitions, maxRepetitions, handleSectionComplete, setRepetitions]);
 
-  const speakText = () => {
-    if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(getCurrentTargetText());
-        utterance.lang = speechLanguage;
-        
-        const matchingVoices = voices.filter(voice => voice.lang.startsWith(speechLanguage));
-        if (matchingVoices.length > 0) {
-        utterance.voice = matchingVoices[0];
-        }
-        
-        console.log(`Speaking in language: ${speechLanguage}`);
-        window.speechSynthesis.speak(utterance);
-    }
-    };
+  const handleShowText = useCallback(() => {
+    setShowTargetText(true);
+  }, []);
 
   return (
     <>
@@ -129,6 +144,7 @@ const PracticeView: React.FC<PracticeViewProps> = ({
         <button
           onClick={handleReset}
           className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          title="Exit memorization (Alt+X)"
         >
           Exit
         </button>
@@ -144,12 +160,12 @@ const PracticeView: React.FC<PracticeViewProps> = ({
             <p>Text hidden - try to recall from memory</p>
             <button 
               className="mt-2 px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
-              onClick={() => setShowTargetText(true)}
+              onClick={handleShowText}
+              title="Show text (Alt+S)"
             >
               Show text
             </button>
           </div>
-          
         )}
       </div>
       
@@ -163,31 +179,34 @@ const PracticeView: React.FC<PracticeViewProps> = ({
       />
       
       {mode === 'single' && (
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <button
             id="prev"
             onClick={goToPrevious}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={currentLineIndex === 0}
+            title="Prev"
           >
             Previous
           </button>
           <button 
-                className="mt-2 ml-2 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                onClick={speakText}
-                >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" className="inline mr-1">
-                    <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/>
-                    <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z"/>
-                    <path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/>
-                </svg>
-                Listen
-            </button>
+            className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center"
+            onClick={speakText}
+            title="Listen"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" className="mr-1">
+              <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/>
+              <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z"/>
+              <path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/>
+            </svg>
+            Listen
+          </button>
           <button
             id="next"
             onClick={goToNext}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={currentLineIndex === lines.length - 1}
+            title="Next"
           >
             Next
           </button>
