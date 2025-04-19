@@ -1,4 +1,5 @@
-import React from 'react';
+import React, {useState} from 'react';
+import { renderLatexContent } from './utils/latexUtils'
 
 interface InputSectionProps {
   text: string;
@@ -39,6 +40,7 @@ const InputSection: React.FC<InputSectionProps> = ({
       reader.readAsText(file);
     }
   };
+  const [showPreview, setShowPreview] = useState(false);
 
   return (
     <div className="w-full space-y-6 px-4" id="input-section">
@@ -51,9 +53,24 @@ const InputSection: React.FC<InputSectionProps> = ({
             className="w-full h-64 p-3 border rounded-lg dark:bg-gray-800 dark:text-gray-100"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Enter your text here..."
+            placeholder="Enter text here... Use $...$ for inline LaTeX and $$...$$ for block LaTeX."
           />
         </div>
+         <div className="flex items-center">
+            <button
+              type="button"
+              onClick={() => setShowPreview(!showPreview)}
+              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800"
+            >
+              {showPreview ? 'Hide LaTeX Preview' : 'Show LaTeX Preview'}
+            </button>
+        </div>
+        {showPreview && (
+          <div className="latex-preview p-4 bg-gray-50 dark:bg-gray-800 rounded border">
+            <h3 className="font-semibold mb-2">LaTeX Preview</h3>
+            {renderLatexContent(text)}
+          </div>
+        )}
         
         <div className="flex flex-col space-y-4">
           <div className="flex items-center space-x-4">

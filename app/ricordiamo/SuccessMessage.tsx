@@ -1,4 +1,5 @@
 import React from 'react';
+import { renderLatexContent } from './utils/latexUtils';
 
 interface SuccessMessageProps {
   text: string;
@@ -25,7 +26,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = ({
           Full Text:
         </h3>
         <pre className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100">
-          {text}
+          {renderLatexContent(text)}
         </pre>
       </div>
       
